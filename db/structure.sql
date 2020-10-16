@@ -1,5 +1,6 @@
 SET statement_timeout = 0;
 SET lock_timeout = 0;
+SET idle_in_transaction_session_timeout = 0;
 SET client_encoding = 'UTF8';
 SET standard_conforming_strings = on;
 SELECT pg_catalog.set_config('search_path', '', false);
@@ -9,17 +10,17 @@ SET client_min_messages = warning;
 SET row_security = off;
 
 --
--- Name: plpgsql; Type: EXTENSION; Schema: -; Owner: -
+-- Name: audit; Type: SCHEMA; Schema: -; Owner: -
 --
 
-CREATE EXTENSION IF NOT EXISTS plpgsql WITH SCHEMA pg_catalog;
+CREATE SCHEMA audit;
 
 
 --
--- Name: EXTENSION plpgsql; Type: COMMENT; Schema: -; Owner: -
+-- Name: SCHEMA audit; Type: COMMENT; Schema: -; Owner: -
 --
 
-COMMENT ON EXTENSION plpgsql IS 'PL/pgSQL procedural language';
+COMMENT ON SCHEMA audit IS 'Out-of-table audit/history logging tables and trigger functions';
 
 
 --
@@ -34,6 +35,34 @@ CREATE EXTENSION IF NOT EXISTS btree_gist WITH SCHEMA public;
 --
 
 COMMENT ON EXTENSION btree_gist IS 'support for indexing common datatypes in GiST';
+
+
+--
+-- Name: hstore; Type: EXTENSION; Schema: -; Owner: -
+--
+
+CREATE EXTENSION IF NOT EXISTS hstore WITH SCHEMA public;
+
+
+--
+-- Name: EXTENSION hstore; Type: COMMENT; Schema: -; Owner: -
+--
+
+COMMENT ON EXTENSION hstore IS 'data type for storing sets of (key, value) pairs';
+
+
+--
+-- Name: pg_stat_statements; Type: EXTENSION; Schema: -; Owner: -
+--
+
+CREATE EXTENSION IF NOT EXISTS pg_stat_statements WITH SCHEMA public;
+
+
+--
+-- Name: EXTENSION pg_stat_statements; Type: COMMENT; Schema: -; Owner: -
+--
+
+COMMENT ON EXTENSION pg_stat_statements IS 'track execution statistics of all SQL statements executed';
 
 
 --
@@ -106,6 +135,27 @@ CREATE TYPE public.nwr_enum AS ENUM (
 
 
 --
+-- Name: osm_member; Type: TYPE; Schema: public; Owner: -
+--
+
+CREATE TYPE public.osm_member AS (
+	type text,
+	ref bigint,
+	role text
+);
+
+
+--
+-- Name: osm_tag; Type: TYPE; Schema: public; Owner: -
+--
+
+CREATE TYPE public.osm_tag AS (
+	k text,
+	v text
+);
+
+
+--
 -- Name: user_role_enum; Type: TYPE; Schema: public; Owner: -
 --
 
@@ -129,89 +179,459 @@ CREATE TYPE public.user_status_enum AS ENUM (
 
 
 --
--- Name: maptile_for_point(bigint, bigint, integer); Type: FUNCTION; Schema: public; Owner: -
+-- Name: bxid_to_int4(xid); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.maptile_for_point(scaled_lat bigint, scaled_lon bigint, zoom integer) RETURNS integer
-    LANGUAGE plpgsql IMMUTABLE
+CREATE FUNCTION public.bxid_to_int4(a xid) RETURNS integer
+    LANGUAGE plpgsql
+    AS $$
+        BEGIN
+                RETURN a;
+        END;
+$$;
+
+
+--
+-- Name: f(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.f() RETURNS text
+    LANGUAGE sql
+    AS $$
+      SELECT string_agg (substr('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789', ceil (random() * 62)::integer, 1), '')
+      FROM generate_series(1, 20)
+    $$;
+
+
+--
+-- Name: instr(character varying, character varying); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.instr(character varying, character varying) RETURNS integer
+    LANGUAGE plpgsql IMMUTABLE STRICT
+    AS $_$
+BEGIN
+    RETURN instr($1, $2, 1);
+END;
+$_$;
+
+
+--
+-- Name: instr(character varying, character varying, integer); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.instr(string character varying, string_to_search_for character varying, beg_index integer) RETURNS integer
+    LANGUAGE plpgsql IMMUTABLE STRICT
     AS $$
 DECLARE
-  lat CONSTANT DOUBLE PRECISION := scaled_lat / 10000000.0;
-  lon CONSTANT DOUBLE PRECISION := scaled_lon / 10000000.0;
-  zscale CONSTANT DOUBLE PRECISION := 2.0 ^ zoom;
-  pi CONSTANT DOUBLE PRECISION := 3.141592653589793;
-  r_per_d CONSTANT DOUBLE PRECISION := pi / 180.0;
-  x int4;
-  y int4;
+    pos integer NOT NULL DEFAULT 0;
+    temp_str varchar;
+    beg integer;
+    length integer;
+    ss_length integer;
 BEGIN
-  -- straight port of the C code. see db/functions/maptile.c
-  x := floor((lon + 180.0) * zscale / 360.0);
-  y := floor((1.0 - ln(tan(lat * r_per_d) + 1.0 / cos(lat * r_per_d)) / pi) * zscale / 2.0);
+    IF beg_index > 0 THEN
+        temp_str := substring(string FROM beg_index);
+        pos := position(string_to_search_for IN temp_str);
 
-  RETURN (x << zoom) | y;
+        IF pos = 0 THEN
+            RETURN 0;
+        ELSE
+            RETURN pos + beg_index - 1;
+        END IF;
+    ELSIF beg_index < 0 THEN
+        ss_length := char_length(string_to_search_for);
+        length := char_length(string);
+        beg := length + 1 + beg_index;
+
+        WHILE beg > 0 LOOP
+            temp_str := substring(string FROM beg FOR ss_length);
+            IF string_to_search_for = temp_str THEN
+                RETURN beg;
+            END IF;
+
+            beg := beg - 1;
+        END LOOP;
+
+        RETURN 0;
+    ELSE
+        RETURN 0;
+    END IF;
 END;
 $$;
 
 
 --
--- Name: tile_for_point(integer, integer); Type: FUNCTION; Schema: public; Owner: -
+-- Name: instr(character varying, character varying, integer, integer); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.tile_for_point(scaled_lat integer, scaled_lon integer) RETURNS bigint
-    LANGUAGE plpgsql IMMUTABLE
+CREATE FUNCTION public.instr(string character varying, string_to_search_for character varying, beg_index integer, occur_index integer) RETURNS integer
+    LANGUAGE plpgsql IMMUTABLE STRICT
     AS $$
 DECLARE
-  x int8; -- quantized x from lon,
-  y int8; -- quantized y from lat,
+    pos integer NOT NULL DEFAULT 0;
+    occur_number integer NOT NULL DEFAULT 0;
+    temp_str varchar;
+    beg integer;
+    i integer;
+    length integer;
+    ss_length integer;
 BEGIN
-  x := round(((scaled_lon / 10000000.0) + 180.0) * 65535.0 / 360.0);
-  y := round(((scaled_lat / 10000000.0) +  90.0) * 65535.0 / 180.0);
+    IF occur_index <= 0 THEN
+        RAISE 'argument ''%'' is out of range', occur_index
+          USING ERRCODE = '22003';
+    END IF;
 
-  -- these bit-masks are special numbers used in the bit interleaving algorithm.
-  -- see https://graphics.stanford.edu/~seander/bithacks.html#InterleaveBMN
-  -- for the original algorithm and more details.
-  x := (x | (x << 8)) &   16711935; -- 0x00FF00FF
-  x := (x | (x << 4)) &  252645135; -- 0x0F0F0F0F
-  x := (x | (x << 2)) &  858993459; -- 0x33333333
-  x := (x | (x << 1)) & 1431655765; -- 0x55555555
+    IF beg_index > 0 THEN
+        beg := beg_index - 1;
+        FOR i IN 1..occur_index LOOP
+            temp_str := substring(string FROM beg + 1);
+            pos := position(string_to_search_for IN temp_str);
+            IF pos = 0 THEN
+                RETURN 0;
+            END IF;
+            beg := beg + pos;
+        END LOOP;
 
-  y := (y | (y << 8)) &   16711935; -- 0x00FF00FF
-  y := (y | (y << 4)) &  252645135; -- 0x0F0F0F0F
-  y := (y | (y << 2)) &  858993459; -- 0x33333333
-  y := (y | (y << 1)) & 1431655765; -- 0x55555555
+        RETURN beg;
+    ELSIF beg_index < 0 THEN
+        ss_length := char_length(string_to_search_for);
+        length := char_length(string);
+        beg := length + 1 + beg_index;
 
-  RETURN (x << 1) | y;
+        WHILE beg > 0 LOOP
+            temp_str := substring(string FROM beg FOR ss_length);
+            IF string_to_search_for = temp_str THEN
+                occur_number := occur_number + 1;
+                IF occur_number = occur_index THEN
+                    RETURN beg;
+                END IF;
+            END IF;
+
+            beg := beg - 1;
+        END LOOP;
+
+        RETURN 0;
+    ELSE
+        RETURN 0;
+    END IF;
 END;
 $$;
 
 
 --
--- Name: xid_to_int4(xid); Type: FUNCTION; Schema: public; Owner: -
+-- Name: lock_conflict(text, text); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.xid_to_int4(t xid) RETURNS integer
-    LANGUAGE plpgsql STRICT
-    AS $$
-DECLARE
-  tl bigint;
-  ti int;
+CREATE FUNCTION public.lock_conflict(text, text) RETURNS boolean
+    LANGUAGE plpgsql
+    AS $_$
 BEGIN
-  tl := t;
-
-  IF tl >= 2147483648 THEN
-    tl := tl - 4294967296;
+  IF    $1 = 'AccessShareLock' THEN
+    IF $2 = 'AccessExclusiveLock' THEN
+         RETURN TRUE;
+    ELSE
+         RETURN FALSE;
+    END IF;
+  ELSIF $1 = 'RowShareLock' THEN
+    IF $2 = 'ExclusiveLock' OR
+       $2 = 'AccessExclusiveLock' THEN
+         RETURN TRUE;
+    ELSE
+         RETURN FALSE;
+    END IF;
+  ELSIF $1 = 'RowExclusiveLock' THEN
+    IF $2 = 'ShareLock' OR
+       $2 = 'ShareRowExclusiveLock' OR
+       $2 = 'ExclusiveLock' OR
+       $2 = 'AccessExclusiveLock' THEN
+         RETURN TRUE;
+    ELSE
+         RETURN FALSE;
+    END IF;
+  ELSIF $1 = 'ShareUpdateExclusiveLock' THEN
+    IF $2 = 'ShareUpdateExclusiveLock' OR
+       $2 = 'ShareLock' OR
+       $2 = 'ShareRowExclusiveLock' OR
+       $2 = 'ExclusiveLock' OR
+       $2 = 'AccessExclusiveLock' THEN
+         RETURN TRUE;
+    ELSE
+         RETURN FALSE;
+    END IF;
+  ELSIF $1 = 'ShareLock' THEN
+    IF $2 = 'RowExclusiveLock' OR
+       $2 = 'ShareUpdateExclusiveLock' OR
+       $2 = 'ShareRowExclusiveLock' OR
+       $2 = 'ExclusiveLock' OR
+       $2 = 'AccessExclusiveLock' THEN
+         RETURN TRUE;
+    ELSE
+         RETURN FALSE;
+    END IF;
+  ELSIF $1 = 'ShareRowExclusiveLock' THEN
+    IF $2 = 'RowExclusiveLock' OR
+       $2 = 'ShareUpdateExclusiveLock' OR
+       $2 = 'ShareLock' OR
+       $2 = 'ShareRowExclusiveLock' OR
+       $2 = 'ExclusiveLock' OR
+       $2 = 'AccessExclusiveLock' THEN
+         RETURN TRUE;
+    ELSE
+         RETURN FALSE;
+    END IF;
+  ELSIF $1 = 'ExclusiveLock' THEN
+    IF $2 = 'RowShareLock' OR
+       $2 = 'RowExclusiveLock' OR
+       $2 = 'ShareUpdateExclusiveLock' OR
+       $2 = 'ShareLock' OR
+       $2 = 'ShareRowExclusiveLock' OR
+       $2 = 'ExclusiveLock' OR
+       $2 = 'AccessExclusiveLock' THEN
+         RETURN TRUE;
+    ELSE
+         RETURN FALSE;
+    END IF;
+  ELSIF $1 = 'AccessExclusiveLock' THEN
+    RETURN TRUE;
+  ELSE
+    RAISE EXCEPTION 'Invalid Lock Mode: %', $1;
   END IF;
+END;
+$_$;
 
-  ti := tl;
 
-  RETURN ti;
+--
+-- Name: replicate_nodes(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.replicate_nodes() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+  INSERT INTO replication_updates(nwr, id, version, txid)
+    values('Node'::nwr_enum, NEW.node_id, NEW.version, txid_current());
+  RETURN NEW;
+END;
+$$;
+
+
+--
+-- Name: replicate_relations(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.replicate_relations() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+  INSERT INTO replication_updates(nwr, id, version, txid)
+    values('Relation'::nwr_enum, NEW.relation_id, NEW.version, txid_current());
+  RETURN NEW;
+END;
+$$;
+
+
+--
+-- Name: replicate_ways(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.replicate_ways() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+  INSERT INTO replication_updates(nwr, id, version, txid)
+    values('Way'::nwr_enum, NEW.way_id, NEW.version, txid_current());
+  RETURN NEW;
 END;
 $$;
 
 
 SET default_tablespace = '';
 
-SET default_with_oids = false;
+SET default_table_access_method = heap;
+
+--
+-- Name: logged_actions; Type: TABLE; Schema: audit; Owner: -
+--
+
+CREATE TABLE audit.logged_actions (
+    event_id bigint NOT NULL,
+    schema_name text NOT NULL,
+    table_name text NOT NULL,
+    relid oid NOT NULL,
+    session_user_name text,
+    action_tstamp_tx timestamp with time zone NOT NULL,
+    action_tstamp_stm timestamp with time zone NOT NULL,
+    action_tstamp_clk timestamp with time zone NOT NULL,
+    transaction_id bigint,
+    application_name text,
+    client_addr inet,
+    client_port integer,
+    client_query text,
+    action text NOT NULL,
+    row_data public.hstore,
+    changed_fields public.hstore,
+    statement_only boolean NOT NULL,
+    CONSTRAINT logged_actions_action_check CHECK ((action = ANY (ARRAY['I'::text, 'D'::text, 'U'::text, 'T'::text])))
+);
+
+
+--
+-- Name: TABLE logged_actions; Type: COMMENT; Schema: audit; Owner: -
+--
+
+COMMENT ON TABLE audit.logged_actions IS 'History of auditable actions on audited tables, from audit.if_modified_func()';
+
+
+--
+-- Name: COLUMN logged_actions.event_id; Type: COMMENT; Schema: audit; Owner: -
+--
+
+COMMENT ON COLUMN audit.logged_actions.event_id IS 'Unique identifier for each auditable event';
+
+
+--
+-- Name: COLUMN logged_actions.schema_name; Type: COMMENT; Schema: audit; Owner: -
+--
+
+COMMENT ON COLUMN audit.logged_actions.schema_name IS 'Database schema audited table for this event is in';
+
+
+--
+-- Name: COLUMN logged_actions.table_name; Type: COMMENT; Schema: audit; Owner: -
+--
+
+COMMENT ON COLUMN audit.logged_actions.table_name IS 'Non-schema-qualified table name of table event occured in';
+
+
+--
+-- Name: COLUMN logged_actions.relid; Type: COMMENT; Schema: audit; Owner: -
+--
+
+COMMENT ON COLUMN audit.logged_actions.relid IS 'Table OID. Changes with drop/create. Get with ''tablename''::regclass';
+
+
+--
+-- Name: COLUMN logged_actions.session_user_name; Type: COMMENT; Schema: audit; Owner: -
+--
+
+COMMENT ON COLUMN audit.logged_actions.session_user_name IS 'Login / session user whose statement caused the audited event';
+
+
+--
+-- Name: COLUMN logged_actions.action_tstamp_tx; Type: COMMENT; Schema: audit; Owner: -
+--
+
+COMMENT ON COLUMN audit.logged_actions.action_tstamp_tx IS 'Transaction start timestamp for tx in which audited event occurred';
+
+
+--
+-- Name: COLUMN logged_actions.action_tstamp_stm; Type: COMMENT; Schema: audit; Owner: -
+--
+
+COMMENT ON COLUMN audit.logged_actions.action_tstamp_stm IS 'Statement start timestamp for tx in which audited event occurred';
+
+
+--
+-- Name: COLUMN logged_actions.action_tstamp_clk; Type: COMMENT; Schema: audit; Owner: -
+--
+
+COMMENT ON COLUMN audit.logged_actions.action_tstamp_clk IS 'Wall clock time at which audited event''s trigger call occurred';
+
+
+--
+-- Name: COLUMN logged_actions.transaction_id; Type: COMMENT; Schema: audit; Owner: -
+--
+
+COMMENT ON COLUMN audit.logged_actions.transaction_id IS 'Identifier of transaction that made the change. May wrap, but unique paired with action_tstamp_tx.';
+
+
+--
+-- Name: COLUMN logged_actions.application_name; Type: COMMENT; Schema: audit; Owner: -
+--
+
+COMMENT ON COLUMN audit.logged_actions.application_name IS 'Application name set when this audit event occurred. Can be changed in-session by client.';
+
+
+--
+-- Name: COLUMN logged_actions.client_addr; Type: COMMENT; Schema: audit; Owner: -
+--
+
+COMMENT ON COLUMN audit.logged_actions.client_addr IS 'IP address of client that issued query. Null for unix domain socket.';
+
+
+--
+-- Name: COLUMN logged_actions.client_port; Type: COMMENT; Schema: audit; Owner: -
+--
+
+COMMENT ON COLUMN audit.logged_actions.client_port IS 'Remote peer IP port address of client that issued query. Undefined for unix socket.';
+
+
+--
+-- Name: COLUMN logged_actions.client_query; Type: COMMENT; Schema: audit; Owner: -
+--
+
+COMMENT ON COLUMN audit.logged_actions.client_query IS 'Top-level query that caused this auditable event. May be more than one statement.';
+
+
+--
+-- Name: COLUMN logged_actions.action; Type: COMMENT; Schema: audit; Owner: -
+--
+
+COMMENT ON COLUMN audit.logged_actions.action IS 'Action type; I = insert, D = delete, U = update, T = truncate';
+
+
+--
+-- Name: COLUMN logged_actions.row_data; Type: COMMENT; Schema: audit; Owner: -
+--
+
+COMMENT ON COLUMN audit.logged_actions.row_data IS 'Record value. Null for statement-level trigger. For INSERT this is the new tuple. For DELETE and UPDATE it is the old tuple.';
+
+
+--
+-- Name: COLUMN logged_actions.changed_fields; Type: COMMENT; Schema: audit; Owner: -
+--
+
+COMMENT ON COLUMN audit.logged_actions.changed_fields IS 'New values of fields changed by UPDATE. Null except for row-level UPDATE events.';
+
+
+--
+-- Name: COLUMN logged_actions.statement_only; Type: COMMENT; Schema: audit; Owner: -
+--
+
+COMMENT ON COLUMN audit.logged_actions.statement_only IS '''t'' if audit event is from an FOR EACH STATEMENT trigger, ''f'' for FOR EACH ROW';
+
+
+--
+-- Name: logged_actions_event_id_seq; Type: SEQUENCE; Schema: audit; Owner: -
+--
+
+CREATE SEQUENCE audit.logged_actions_event_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: logged_actions_event_id_seq; Type: SEQUENCE OWNED BY; Schema: audit; Owner: -
+--
+
+ALTER SEQUENCE audit.logged_actions_event_id_seq OWNED BY audit.logged_actions.event_id;
+
+
+--
+-- Name: accounts; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.accounts (
+    id integer NOT NULL,
+    number character varying NOT NULL,
+    client character varying NOT NULL,
+    amount integer
+);
+
 
 --
 -- Name: acls; Type: TABLE; Schema: public; Owner: -
@@ -321,8 +741,118 @@ ALTER SEQUENCE public.active_storage_blobs_id_seq OWNED BY public.active_storage
 CREATE TABLE public.ar_internal_metadata (
     key character varying NOT NULL,
     value character varying,
-    created_at timestamp(6) without time zone NOT NULL,
-    updated_at timestamp(6) without time zone NOT NULL
+    created_at timestamp without time zone NOT NULL,
+    updated_at timestamp without time zone NOT NULL
+);
+
+
+--
+-- Name: author; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.author (
+    id integer NOT NULL,
+    name character varying NOT NULL,
+    country character varying NOT NULL
+);
+
+
+--
+-- Name: author_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.author_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: author_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.author_id_seq OWNED BY public.author.id;
+
+
+--
+-- Name: nodes; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.nodes (
+    node_id bigint NOT NULL,
+    latitude integer NOT NULL,
+    longitude integer NOT NULL,
+    changeset_id bigint NOT NULL,
+    visible boolean NOT NULL,
+    "timestamp" timestamp without time zone NOT NULL,
+    tile bigint NOT NULL,
+    version bigint NOT NULL,
+    redaction_id integer
+);
+
+
+--
+-- Name: bla; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public.bla AS
+ SELECT nodes.node_id,
+    nodes.latitude,
+    nodes.longitude,
+    nodes.changeset_id,
+    nodes.visible,
+    nodes."timestamp",
+    nodes.tile,
+    nodes.version,
+    nodes.redaction_id
+   FROM public.nodes;
+
+
+--
+-- Name: book; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.book (
+    id integer NOT NULL,
+    title character varying NOT NULL,
+    author_id integer NOT NULL
+);
+
+
+--
+-- Name: book_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.book_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: book_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.book_id_seq OWNED BY public.book.id;
+
+
+--
+-- Name: c; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.c (
+    id bigint,
+    latitude integer,
+    longitude integer,
+    changeset_id bigint,
+    visible boolean,
+    "timestamp" timestamp with time zone,
+    tile bigint,
+    version bigint
 );
 
 
@@ -357,6 +887,19 @@ CREATE SEQUENCE public.changeset_comments_id_seq
 --
 
 ALTER SEQUENCE public.changeset_comments_id_seq OWNED BY public.changeset_comments.id;
+
+
+--
+-- Name: changeset_idempotency_cache; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.changeset_idempotency_cache (
+    id bigint NOT NULL,
+    idempotency_key character varying,
+    hash_value character varying,
+    "timestamp" timestamp without time zone,
+    payload jsonb
+);
 
 
 --
@@ -492,7 +1035,7 @@ CREATE TABLE public.current_nodes (
 --
 
 CREATE SEQUENCE public.current_nodes_id_seq
-    START WITH 1
+    START WITH 5000000000
     INCREMENT BY 1
     NO MINVALUE
     NO MAXVALUE
@@ -548,7 +1091,7 @@ CREATE TABLE public.current_relations (
 --
 
 CREATE SEQUENCE public.current_relations_id_seq
-    START WITH 1
+    START WITH 80000000000
     INCREMENT BY 1
     NO MINVALUE
     NO MAXVALUE
@@ -602,7 +1145,7 @@ CREATE TABLE public.current_ways (
 --
 
 CREATE SEQUENCE public.current_ways_id_seq
-    START WITH 1
+    START WITH 4000000000
     INCREMENT BY 1
     NO MINVALUE
     NO MAXVALUE
@@ -736,6 +1279,35 @@ CREATE TABLE public.diary_entry_subscriptions (
     user_id bigint NOT NULL,
     diary_entry_id bigint NOT NULL
 );
+
+
+--
+-- Name: foo; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.foo (
+    id integer NOT NULL,
+    url_prefix text DEFAULT public.f() NOT NULL
+);
+
+
+--
+-- Name: foo_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.foo_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: foo_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.foo_id_seq OWNED BY public.foo.id;
 
 
 --
@@ -924,6 +1496,16 @@ ALTER SEQUENCE public.issues_id_seq OWNED BY public.issues.id;
 
 
 --
+-- Name: jstuff; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.jstuff (
+    id integer,
+    val jsonb
+);
+
+
+--
 -- Name: languages; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -980,23 +1562,6 @@ CREATE TABLE public.node_tags (
     version bigint NOT NULL,
     k character varying DEFAULT ''::character varying NOT NULL,
     v character varying DEFAULT ''::character varying NOT NULL
-);
-
-
---
--- Name: nodes; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.nodes (
-    node_id bigint NOT NULL,
-    latitude integer NOT NULL,
-    longitude integer NOT NULL,
-    changeset_id bigint NOT NULL,
-    visible boolean NOT NULL,
-    "timestamp" timestamp without time zone NOT NULL,
-    tile bigint NOT NULL,
-    version bigint NOT NULL,
-    redaction_id integer
 );
 
 
@@ -1068,6 +1633,119 @@ CREATE SEQUENCE public.notes_id_seq
 --
 
 ALTER SEQUENCE public.notes_id_seq OWNED BY public.notes.id;
+
+
+--
+-- Name: oauth_access_grants; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.oauth_access_grants (
+    id bigint NOT NULL,
+    resource_owner_id bigint NOT NULL,
+    application_id bigint NOT NULL,
+    token character varying NOT NULL,
+    expires_in integer NOT NULL,
+    redirect_uri text NOT NULL,
+    created_at timestamp without time zone NOT NULL,
+    revoked_at timestamp without time zone,
+    scopes character varying DEFAULT ''::character varying NOT NULL,
+    code_challenge character varying,
+    code_challenge_method character varying
+);
+
+
+--
+-- Name: oauth_access_grants_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.oauth_access_grants_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: oauth_access_grants_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.oauth_access_grants_id_seq OWNED BY public.oauth_access_grants.id;
+
+
+--
+-- Name: oauth_access_tokens; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.oauth_access_tokens (
+    id bigint NOT NULL,
+    resource_owner_id bigint,
+    application_id bigint NOT NULL,
+    token character varying NOT NULL,
+    refresh_token character varying,
+    expires_in integer,
+    revoked_at timestamp without time zone,
+    created_at timestamp without time zone NOT NULL,
+    scopes character varying,
+    previous_refresh_token character varying DEFAULT ''::character varying NOT NULL
+);
+
+
+--
+-- Name: oauth_access_tokens_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.oauth_access_tokens_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: oauth_access_tokens_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.oauth_access_tokens_id_seq OWNED BY public.oauth_access_tokens.id;
+
+
+--
+-- Name: oauth_applications; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.oauth_applications (
+    id bigint NOT NULL,
+    name character varying NOT NULL,
+    uid character varying NOT NULL,
+    secret character varying NOT NULL,
+    redirect_uri text NOT NULL,
+    scopes character varying DEFAULT ''::character varying NOT NULL,
+    confidential boolean DEFAULT true NOT NULL,
+    created_at timestamp(6) without time zone NOT NULL,
+    updated_at timestamp(6) without time zone NOT NULL,
+    owner_id integer,
+    owner_type character varying
+);
+
+
+--
+-- Name: oauth_applications_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.oauth_applications_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: oauth_applications_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.oauth_applications_id_seq OWNED BY public.oauth_applications.id;
 
 
 --
@@ -1151,6 +1829,84 @@ ALTER SEQUENCE public.oauth_tokens_id_seq OWNED BY public.oauth_tokens.id;
 
 
 --
+-- Name: people; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.people (
+    id integer,
+    fname text,
+    lname text,
+    job text
+);
+
+
+--
+-- Name: person; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.person (
+    id integer NOT NULL,
+    name character varying NOT NULL,
+    data bytea
+);
+
+
+--
+-- Name: person_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.person_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: person_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.person_id_seq OWNED BY public.person.id;
+
+
+--
+-- Name: planet_osm_nodes; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.planet_osm_nodes (
+    id bigint NOT NULL,
+    lat integer NOT NULL,
+    lon integer NOT NULL
+);
+
+
+--
+-- Name: planet_osm_rels; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.planet_osm_rels (
+    id bigint NOT NULL,
+    way_off smallint,
+    rel_off smallint,
+    parts bigint[],
+    members text[],
+    tags text[]
+);
+
+
+--
+-- Name: planet_osm_ways; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.planet_osm_ways (
+    id bigint NOT NULL,
+    nodes bigint[] NOT NULL,
+    tags text[]
+);
+
+
+--
 -- Name: redactions; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -1221,6 +1977,18 @@ CREATE TABLE public.relations (
     version bigint NOT NULL,
     visible boolean DEFAULT true NOT NULL,
     redaction_id integer
+);
+
+
+--
+-- Name: replication_updates; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.replication_updates (
+    nwr public.nwr_enum,
+    id bigint,
+    version bigint,
+    txid bigint
 );
 
 
@@ -1475,6 +2243,13 @@ CREATE TABLE public.ways (
 
 
 --
+-- Name: logged_actions event_id; Type: DEFAULT; Schema: audit; Owner: -
+--
+
+ALTER TABLE ONLY audit.logged_actions ALTER COLUMN event_id SET DEFAULT nextval('audit.logged_actions_event_id_seq'::regclass);
+
+
+--
 -- Name: acls id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -1493,6 +2268,20 @@ ALTER TABLE ONLY public.active_storage_attachments ALTER COLUMN id SET DEFAULT n
 --
 
 ALTER TABLE ONLY public.active_storage_blobs ALTER COLUMN id SET DEFAULT nextval('public.active_storage_blobs_id_seq'::regclass);
+
+
+--
+-- Name: author id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.author ALTER COLUMN id SET DEFAULT nextval('public.author_id_seq'::regclass);
+
+
+--
+-- Name: book id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.book ALTER COLUMN id SET DEFAULT nextval('public.book_id_seq'::regclass);
 
 
 --
@@ -1559,6 +2348,13 @@ ALTER TABLE ONLY public.diary_entries ALTER COLUMN id SET DEFAULT nextval('publi
 
 
 --
+-- Name: foo id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.foo ALTER COLUMN id SET DEFAULT nextval('public.foo_id_seq'::regclass);
+
+
+--
 -- Name: friends id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -1615,6 +2411,27 @@ ALTER TABLE ONLY public.notes ALTER COLUMN id SET DEFAULT nextval('public.notes_
 
 
 --
+-- Name: oauth_access_grants id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.oauth_access_grants ALTER COLUMN id SET DEFAULT nextval('public.oauth_access_grants_id_seq'::regclass);
+
+
+--
+-- Name: oauth_access_tokens id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.oauth_access_tokens ALTER COLUMN id SET DEFAULT nextval('public.oauth_access_tokens_id_seq'::regclass);
+
+
+--
+-- Name: oauth_applications id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.oauth_applications ALTER COLUMN id SET DEFAULT nextval('public.oauth_applications_id_seq'::regclass);
+
+
+--
 -- Name: oauth_nonces id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -1626,6 +2443,13 @@ ALTER TABLE ONLY public.oauth_nonces ALTER COLUMN id SET DEFAULT nextval('public
 --
 
 ALTER TABLE ONLY public.oauth_tokens ALTER COLUMN id SET DEFAULT nextval('public.oauth_tokens_id_seq'::regclass);
+
+
+--
+-- Name: person id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.person ALTER COLUMN id SET DEFAULT nextval('public.person_id_seq'::regclass);
 
 
 --
@@ -1671,6 +2495,22 @@ ALTER TABLE ONLY public.users ALTER COLUMN id SET DEFAULT nextval('public.users_
 
 
 --
+-- Name: logged_actions logged_actions_pkey; Type: CONSTRAINT; Schema: audit; Owner: -
+--
+
+ALTER TABLE ONLY audit.logged_actions
+    ADD CONSTRAINT logged_actions_pkey PRIMARY KEY (event_id);
+
+
+--
+-- Name: accounts accounts_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.accounts
+    ADD CONSTRAINT accounts_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: acls acls_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -1703,11 +2543,35 @@ ALTER TABLE ONLY public.ar_internal_metadata
 
 
 --
+-- Name: author author_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.author
+    ADD CONSTRAINT author_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: book book_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.book
+    ADD CONSTRAINT book_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: changeset_comments changeset_comments_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.changeset_comments
     ADD CONSTRAINT changeset_comments_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: changeset_idempotency_cache changeset_idempotency_cache_pk; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.changeset_idempotency_cache
+    ADD CONSTRAINT changeset_idempotency_cache_pk PRIMARY KEY (id);
 
 
 --
@@ -1823,6 +2687,14 @@ ALTER TABLE ONLY public.diary_entry_subscriptions
 
 
 --
+-- Name: foo foo_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.foo
+    ADD CONSTRAINT foo_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: friends friends_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -1911,6 +2783,30 @@ ALTER TABLE ONLY public.notes
 
 
 --
+-- Name: oauth_access_grants oauth_access_grants_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.oauth_access_grants
+    ADD CONSTRAINT oauth_access_grants_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: oauth_access_tokens oauth_access_tokens_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.oauth_access_tokens
+    ADD CONSTRAINT oauth_access_tokens_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: oauth_applications oauth_applications_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.oauth_applications
+    ADD CONSTRAINT oauth_applications_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: oauth_nonces oauth_nonces_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -1924,6 +2820,38 @@ ALTER TABLE ONLY public.oauth_nonces
 
 ALTER TABLE ONLY public.oauth_tokens
     ADD CONSTRAINT oauth_tokens_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: person person_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.person
+    ADD CONSTRAINT person_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: planet_osm_nodes planet_osm_nodes_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.planet_osm_nodes
+    ADD CONSTRAINT planet_osm_nodes_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: planet_osm_rels planet_osm_rels_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.planet_osm_rels
+    ADD CONSTRAINT planet_osm_rels_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: planet_osm_ways planet_osm_ways_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.planet_osm_ways
+    ADD CONSTRAINT planet_osm_ways_pkey PRIMARY KEY (id);
 
 
 --
@@ -2036,6 +2964,27 @@ ALTER TABLE ONLY public.way_tags
 
 ALTER TABLE ONLY public.ways
     ADD CONSTRAINT ways_pkey PRIMARY KEY (way_id, version);
+
+
+--
+-- Name: logged_actions_action_idx; Type: INDEX; Schema: audit; Owner: -
+--
+
+CREATE INDEX logged_actions_action_idx ON audit.logged_actions USING btree (action);
+
+
+--
+-- Name: logged_actions_action_tstamp_tx_stm_idx; Type: INDEX; Schema: audit; Owner: -
+--
+
+CREATE INDEX logged_actions_action_tstamp_tx_stm_idx ON audit.logged_actions USING btree (action_tstamp_stm);
+
+
+--
+-- Name: logged_actions_relid_idx; Type: INDEX; Schema: audit; Owner: -
+--
+
+CREATE INDEX logged_actions_relid_idx ON audit.logged_actions USING btree (relid);
 
 
 --
@@ -2319,13 +3268,6 @@ CREATE INDEX index_issue_comments_on_user_id ON public.issue_comments USING btre
 
 
 --
--- Name: index_issues_on_assigned_role; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX index_issues_on_assigned_role ON public.issues USING btree (assigned_role);
-
-
---
 -- Name: index_issues_on_reportable_type_and_reportable_id; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -2337,13 +3279,6 @@ CREATE INDEX index_issues_on_reportable_type_and_reportable_id ON public.issues 
 --
 
 CREATE INDEX index_issues_on_reported_user_id ON public.issues USING btree (reported_user_id);
-
-
---
--- Name: index_issues_on_status; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX index_issues_on_status ON public.issues USING btree (status);
 
 
 --
@@ -2365,6 +3300,69 @@ CREATE INDEX index_note_comments_on_body ON public.note_comments USING gin (to_t
 --
 
 CREATE INDEX index_note_comments_on_created_at ON public.note_comments USING btree (created_at);
+
+
+--
+-- Name: index_oauth_access_grants_on_application_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_oauth_access_grants_on_application_id ON public.oauth_access_grants USING btree (application_id);
+
+
+--
+-- Name: index_oauth_access_grants_on_resource_owner_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_oauth_access_grants_on_resource_owner_id ON public.oauth_access_grants USING btree (resource_owner_id);
+
+
+--
+-- Name: index_oauth_access_grants_on_token; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX index_oauth_access_grants_on_token ON public.oauth_access_grants USING btree (token);
+
+
+--
+-- Name: index_oauth_access_tokens_on_application_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_oauth_access_tokens_on_application_id ON public.oauth_access_tokens USING btree (application_id);
+
+
+--
+-- Name: index_oauth_access_tokens_on_refresh_token; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX index_oauth_access_tokens_on_refresh_token ON public.oauth_access_tokens USING btree (refresh_token);
+
+
+--
+-- Name: index_oauth_access_tokens_on_resource_owner_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_oauth_access_tokens_on_resource_owner_id ON public.oauth_access_tokens USING btree (resource_owner_id);
+
+
+--
+-- Name: index_oauth_access_tokens_on_token; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX index_oauth_access_tokens_on_token ON public.oauth_access_tokens USING btree (token);
+
+
+--
+-- Name: index_oauth_applications_on_owner_id_and_owner_type; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_oauth_applications_on_owner_id_and_owner_type ON public.oauth_applications USING btree (owner_id, owner_type);
+
+
+--
+-- Name: index_oauth_applications_on_uid; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX index_oauth_applications_on_uid ON public.oauth_applications USING btree (uid);
 
 
 --
@@ -2508,6 +3506,13 @@ CREATE INDEX relations_timestamp_idx ON public.relations USING btree ("timestamp
 
 
 --
+-- Name: replication_update_txid_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX replication_update_txid_idx ON public.replication_updates USING btree (txid);
+
+
+--
 -- Name: user_id_idx; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -2599,6 +3604,35 @@ CREATE INDEX ways_timestamp_idx ON public.ways USING btree ("timestamp");
 
 
 --
+-- Name: nodes replicate_nodes; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER replicate_nodes AFTER INSERT ON public.nodes FOR EACH ROW EXECUTE FUNCTION public.replicate_nodes();
+
+
+--
+-- Name: relations replicate_relations; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER replicate_relations AFTER INSERT ON public.relations FOR EACH ROW EXECUTE FUNCTION public.replicate_relations();
+
+
+--
+-- Name: ways replicate_ways; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER replicate_ways AFTER INSERT ON public.ways FOR EACH ROW EXECUTE FUNCTION public.replicate_ways();
+
+
+--
+-- Name: book book_author_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.book
+    ADD CONSTRAINT book_author_id_fkey FOREIGN KEY (author_id) REFERENCES public.author(id);
+
+
+--
 -- Name: changeset_comments changeset_comments_author_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -2612,6 +3646,14 @@ ALTER TABLE ONLY public.changeset_comments
 
 ALTER TABLE ONLY public.changeset_comments
     ADD CONSTRAINT changeset_comments_changeset_id_fkey FOREIGN KEY (changeset_id) REFERENCES public.changesets(id);
+
+
+--
+-- Name: changeset_idempotency_cache changeset_idempotency_cache_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.changeset_idempotency_cache
+    ADD CONSTRAINT changeset_idempotency_cache_fk FOREIGN KEY (id) REFERENCES public.changesets(id);
 
 
 --
@@ -2772,6 +3814,22 @@ ALTER TABLE ONLY public.diary_entry_subscriptions
 
 ALTER TABLE ONLY public.diary_entry_subscriptions
     ADD CONSTRAINT diary_entry_subscriptions_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id);
+
+
+--
+-- Name: oauth_access_tokens fk_rails_732cb83ab7; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.oauth_access_tokens
+    ADD CONSTRAINT fk_rails_732cb83ab7 FOREIGN KEY (application_id) REFERENCES public.oauth_applications(id);
+
+
+--
+-- Name: oauth_access_grants fk_rails_b4b53e07b8; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.oauth_access_grants
+    ADD CONSTRAINT fk_rails_b4b53e07b8 FOREIGN KEY (application_id) REFERENCES public.oauth_applications(id);
 
 
 --
@@ -3138,6 +4196,7 @@ INSERT INTO "schema_migrations" (version) VALUES
 ('20161011010929'),
 ('20170222134109'),
 ('20180204153242'),
+('20181005170057'),
 ('20181020114000'),
 ('20181031113522'),
 ('20190518115041'),
@@ -3145,8 +4204,12 @@ INSERT INTO "schema_migrations" (version) VALUES
 ('20190702193519'),
 ('20190716173946'),
 ('20191120140058'),
+('20200915192340'),
 ('20201006213836'),
 ('20201006220807'),
+('20201011094219'),
+('20201011101222'),
+('20201011123726'),
 ('21'),
 ('22'),
 ('23'),

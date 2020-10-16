@@ -78,6 +78,16 @@ class User < ApplicationRecord
   has_many :issue_comments
 
   has_many :reports
+  
+  has_many  :access_grants, class_name:  "Doorkeeper::AccessGrant",
+                            foreign_key: :resource_owner_id,
+                            dependent:   :delete_all
+
+  has_many  :access_tokens, class_name:  "Doorkeeper::AccessToken",
+                            foreign_key: :resource_owner_id,
+                            dependent:   :delete_all  
+
+  has_many :oauth_applications, class_name: 'Doorkeeper::Application', as: :owner
 
   scope :visible, -> { where(:status => %w[pending active confirmed]) }
   scope :active, -> { where(:status => %w[active confirmed]) }

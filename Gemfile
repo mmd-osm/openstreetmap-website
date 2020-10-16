@@ -66,6 +66,8 @@ gem "quad_tile", "~> 1.0.1"
 # Sanitise URIs
 gem "rack-uri_sanitizer"
 
+gem "doorkeeper"
+
 # Omniauth for authentication
 gem "omniauth"
 gem "omniauth-facebook"

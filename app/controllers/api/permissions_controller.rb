@@ -14,6 +14,8 @@ module Api
     def show
       @permissions = if current_token.present?
                        ClientApplication.all_permissions.select { |p| current_token.read_attribute(p) }
+                     elsif doorkeeper_token
+                       doorkeeper_token.scopes
                      elsif current_user
                        ClientApplication.all_permissions
                      else

@@ -60,8 +60,10 @@ class ApiController < ApplicationController
   end
 
   def current_ability
+    if doorkeeper_token
+      ApiAbility.new(nil).merge(ApiCapability2.new(doorkeeper_token))
     # Use capabilities from the oauth token if it exists and is a valid access token
-    if Authenticator.new(self, [:token]).allow?
+    elsif Authenticator.new(self, [:token]).allow?
       ApiAbility.new(nil).merge(ApiCapability.new(current_token))
     else
       ApiAbility.new(current_user)
@@ -93,17 +95,21 @@ class ApiController < ApplicationController
   # from the authorize method, but can be called elsewhere if authorisation
   # is optional.
   def setup_user_auth
-    # try and setup using OAuth
-    unless Authenticator.new(self, [:token]).allow?
-      username, passwd = get_auth_data # parse from headers
-      # authenticate per-scheme
-      self.current_user = if username.nil?
-                            nil # no authentication provided - perhaps first connect (client should retry after 401)
-                          elsif username == "token"
-                            User.authenticate(:token => passwd) # preferred - random token for user from db, passed in basic auth
-                          else
-                            User.authenticate(:username => username, :password => passwd) # basic auth
-                          end
+    if doorkeeper_token
+      self.current_user = User.find(doorkeeper_token.resource_owner_id)
+    else
+      # try and setup using OAuth
+      unless Authenticator.new(self, [:token]).allow?
+        username, passwd = get_auth_data # parse from headers
+        # authenticate per-scheme
+        self.current_user = if username.nil?
+                              nil # no authentication provided - perhaps first connect (client should retry after 401)
+                            elsif username == "token"
+                              User.authenticate(:token => passwd) # preferred - random token for user from db, passed in basic auth
+                            else
+                              User.authenticate(:username => username, :password => passwd) # basic auth
+                            end
+      end
     end
 
     # have we identified the user?

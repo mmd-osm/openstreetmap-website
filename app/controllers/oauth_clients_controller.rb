@@ -9,6 +9,7 @@ class OauthClientsController < ApplicationController
   def index
     @client_applications = current_user.client_applications
     @tokens = current_user.oauth_tokens.authorized
+    @oauth2_tokens = current_user.access_tokens.where(:revoked_at => nil)
   end
 
   def new

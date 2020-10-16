@@ -20,6 +20,15 @@ Bundler.require(*Rails.groups)
 
 module OpenStreetMap
   class Application < Rails::Application
+
+    #config.to_prepare do
+      #Doorkeeper::AuthorizationsController.layout "site"
+      # include only the ApplicationHelper module
+      #Doorkeeper::ApplicationController.helper ApplicationHelper
+      # include all helpers from your application
+      #Doorkeeper::ApplicationController.helper YourApp::ApplicationHelper.helpers
+    #end
+
     # Initialize configuration defaults for originally generated Rails version.
     config.load_defaults 6.0
 

@@ -1,4 +1,6 @@
 OpenStreetMap::Application.routes.draw do
+  use_doorkeeper :scope => 'oauth2'
+
   # API
   namespace :api do
     get "capabilities" => "capabilities#show" # Deprecated, remove when 0.6 support is removed

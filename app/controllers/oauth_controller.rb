@@ -8,6 +8,18 @@ class OauthController < ApplicationController
   layout "site"
 
   def revoke
+    if params[:oauth2_tokenid]
+      @token = Doorkeeper::AccessToken.where(:id => params[:oauth2_tokenid]).first
+      if @token
+        if @token.resource_owner_id == current_user.id
+          @token.revoke
+          flash[:notice] = t(".flash", :application => @token.application.name)
+        end
+      end
+      redirect_to oauth_clients_url(:display_name => User.where(:id => @token.resource_owner_id).first.display_name)
+      return
+    end
+
     @token = current_user.oauth_tokens.find_by :token => params[:token]
     if @token
       @token.invalidate!

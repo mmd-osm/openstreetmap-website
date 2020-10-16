@@ -27,6 +27,38 @@
   <% end %>
 </table>
 <% end %>
+
+<% unless @oauth2_tokens.empty? %>
+<h3><%= t ".my_tokens" %></h3>
+<p><%= t ".list_tokens" %></p>
+<table class="table table-sm">
+  <thead>
+    <tr>
+      <th><%= t ".application" %></th>
+      <th><%= t ".issued_at" %></th>
+      <th><%= t ".expires_in" %></th>
+      <th><%= t ".scopes" %></th>
+      <th>&nbsp;</th>
+    </tr>
+  </thead>
+  <% @oauth2_tokens.each do |token| %>
+    <tr>
+      <td><%= link_to token.application.name, token.application.redirect_uri %></td>
+      <td><%= token.created_at %></td>
+      <td><%= token.expires_in %></td>
+      <td><%= token.scopes %></td>
+      <td>
+        <%= form_tag({ :controller => "oauth", :action => "revoke" }, { :class => "standard-form" }) do %>
+          <%= hidden_field_tag "oauth2_tokenid", token.id %>
+          <%= submit_tag t(".revoke") %>
+        <% end %>
+      </td>
+    </tr>
+  <% end %>
+</table>
+<% end %>
+
+
 <h3><%= t ".my_apps" %></h3>
 <% if @client_applications.empty? %>
 <p><%= t(".no_apps_html", :oauth => link_to(t(".oauth"), "https://oauth.net")) %></p>
