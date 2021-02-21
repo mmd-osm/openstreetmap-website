@@ -198,14 +198,6 @@ We need to load the `btree-gist` extension, which is needed for showing changese
 psql -d openstreetmap -c "CREATE EXTENSION btree_gist"
 ```
 
-### PostgreSQL Functions
-
-We need to install some special functions into the PostgreSQL database:
-
-```
-psql -d openstreetmap -f db/functions/functions.sql
-```
-
 ### Database structure
 
 To create all the tables, indexes and constraints, run:
@@ -241,45 +233,6 @@ Note that the OSM map tiles you see aren't created from your local database - th
 # Configuration
 
 After installing this software, you may need to carry out some [configuration steps](CONFIGURE.md), depending on your tasks.
-
-# Installing compiled shared library database functions (optional)
-
-There are special database functions required by a (little-used) API call, the migrations and diff replication. The former two are provided as *either* pure SQL functions or a compiled shared library. The SQL versions are installed as part of the recommended install procedure above and the shared library versions are recommended only if you are running a production server and need the diff replication functionality.
-
-If you aren't sure which you need, stick with the SQL versions.
-
-Before installing the functions, it's necessary to install the PostgreSQL server development packages. On Ubuntu this means:
-
-```
-sudo apt-get install postgresql-server-dev-all
-```
-
-On Fedora:
-
-```
-sudo dnf install postgresql-devel
-```
-
-The library then needs compiling.
-
-```
-cd db/functions
-make libpgosm.so
-cd ../..
-```
-
-If you previously installed the SQL versions of these functions, we'll need to delete those before adding the new ones:
-
-```
-psql -d openstreetmap -c "DROP FUNCTION IF EXISTS tile_for_point"
-```
-
-Then we create the functions within each database. We're using `pwd` to substitute in the current working directory, since PostgreSQL needs the full path.
-
-```
-psql -d openstreetmap -c "CREATE FUNCTION tile_for_point(int4, int4) RETURNS int8 AS '`pwd`/db/functions/libpgosm', 'tile_for_point' LANGUAGE C STRICT"
-psql -d openstreetmap -c "CREATE FUNCTION xid_to_int4(xid) RETURNS int4 AS '`pwd`/db/functions/libpgosm', 'xid_to_int4' LANGUAGE C STRICT"
-```
 
 # Ruby development install and versions<a name="rbenv"></a> (optional)
 
