@@ -13,6 +13,10 @@ div.leaflet-marker-icon.location-filter.move-marker {
   background-image: image-url("img/move-handle.png");
 }
 
+.leaflet-touch .leaflet-control-layers-toggle {
+	background-image: image-url("img/layers.png");
+}
+
 /* Override some conflicting styles.
    https://github.com/openstreetmap/openstreetmap-website/pull/121#issuecomment-10206946 */
 

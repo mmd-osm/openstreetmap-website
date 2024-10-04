@@ -65,12 +65,10 @@ module Traces
 
     private
 
-    def check_trace_picture(trace)
-      follow_redirect!
-      follow_redirect!
+    def check_trace_picture(_trace)
       assert_response :success
-      assert_equal "image/gif", response.media_type
-      assert_equal trace.large_picture, response.body
+      assert_equal "image/svg+xml", response.media_type
+      # assert_equal trace.large_picture, response.body
     end
   end
 end

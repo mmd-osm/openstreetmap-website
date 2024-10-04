@@ -11,11 +11,8 @@ module TraceHelper
               options.merge(:size => 50)
   end
 
-  def trace_picture(trace, options = {})
-    options[:class] ||= "trace_image"
-    options[:alt] ||= ""
-
-    image_tag trace_picture_path(trace.user, trace),
-              options.merge(:size => 250)
+  def trace_picture(trace, _options = {})
+    # use on-the-fly image generation endpoint instead
+    content_tag(:div, "", :id => "trace-map", :"data-gpx-file" => trace_picture_path(trace.user, trace).to_s)
   end
 end

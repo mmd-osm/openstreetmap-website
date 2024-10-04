@@ -146,4 +146,43 @@ $(document).ready(function () {
 
   $("#edit_tab")
     .attr("title", I18n.t("javascripts.site.edit_disabled_tooltip"));
+
+  $("#trace-map").each(function () {
+    let map = L.map("trace-map");
+    map.attributionControl.setPrefix(null);
+
+    const copyright_link = $("<a>", {
+      href: "/copyright",
+      text: I18n.t("javascripts.map.openstreetmap_contributors")
+    }).prop("outerHTML");
+
+    const copyright = I18n.t("javascripts.map.copyright_text", { copyright_link: copyright_link });
+
+    let baseLayer = L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: copyright,
+      opacity: 0.75
+    }).addTo(map);
+
+    let context = $(this);
+    const filename = context[0].dataset.gpxFile;
+    fetch(filename)
+      .then(r => r.text())
+      .then(text => {
+        const span = document.createElement("span");
+        span.innerHTML = text;
+
+        const minlat = parseFloat(span.getElementsByTagName("southlimit")[0].textContent);
+        const maxlat = parseFloat(span.getElementsByTagName("northlimit")[0].textContent);
+        const minlon = parseFloat(span.getElementsByTagName("westlimit")[0].textContent);
+        const maxlon = parseFloat(span.getElementsByTagName("eastlimit")[0].textContent);
+
+        const latLngBounds = L.latLngBounds([[minlat, minlon], [maxlat, maxlon]]);
+        map.fitBounds(latLngBounds);
+
+        let svg = L.svgOverlay(span.children[0], latLngBounds, { interactive: true }).addTo(map);
+
+        L.control.layers({ OpenStreetMap: baseLayer }, { "GPX Trace": svg }).addTo(map);
+      });
+  });
 });
+
