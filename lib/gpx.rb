@@ -61,6 +61,65 @@ module GPX
       end
     end
 
+    def svg_picture(min_lat, min_lon, max_lat, max_lon, num_points)
+      nframes = 10
+      width = 250
+      height = 250
+
+      points_per_frame = (num_points.to_f / nframes).ceil
+
+      proj = OSM::Mercator.new(min_lat, min_lon, max_lat, max_lon, width, height)
+      index = 1
+      oldpx = 0.0
+      oldpy = 0.0
+
+      result = %(<svg width="#{width}" height="#{height}" viewBox="0 0 #{width} #{height}")
+      result << %( version="1.1" id="icon" xmlns="http://www.w3.org/2000/svg" xmlns:svg="http://www.w3.org/2000/svg">)
+      result << '<g id="gpx" fill="none" stroke="gray">'
+
+      points.each_slice(points_per_frame) do |a|
+        result << %(<path id="path#{index}" d=")
+        result << "m#{oldpx.round(2)},#{oldpy.round(2)}" if index > 1
+        a.each_with_index do |p, pt|
+          px = proj.x(p.longitude)
+          py = proj.y(p.latitude)
+          result << (index == 1 && pt.next == 1 ? "m" : "L")
+          result << "#{px.round(2)},#{py.round(2)}"
+          oldpx = px
+          oldpy = py
+        end
+        result << '"/>'
+        index += 1
+      end
+
+      result << "</g></svg>"
+
+      StringIO.new(result)
+    end
+
+    def svg_icon(min_lat, min_lon, max_lat, max_lon)
+      width = 50
+      height = 50
+
+      proj = OSM::Mercator.new(min_lat, min_lon, max_lat, max_lon, width, height)
+
+      result = %(<svg width="#{width}" height="#{height}" viewBox="0 0 #{width} #{height}")
+      result << %( version="1.1" id="icon" xmlns="http://www.w3.org/2000/svg" xmlns:svg="http://www.w3.org/2000/svg">)
+      result << '<g id="gpx" fill="none" stroke="black" stoke-width="3">'
+
+      result << %(<path id="path1" d=")
+      points.each_with_index do |p, pt|
+        px = proj.x(p.longitude)
+        py = proj.y(p.latitude)
+        result << (pt.next == 1 ? "m" : "L")
+        result << "#{px.round(2)},#{py.round(2)}"
+      end
+      result << '"/>'
+      result << "</g></svg>"
+
+      StringIO.new(result)
+    end
+
     def picture(min_lat, min_lon, max_lat, max_lon, num_points)
       nframes = 10
       width = 250

@@ -146,4 +146,15 @@ $(document).ready(function () {
 
   $("#edit_tab")
     .attr("title", I18n.t("javascripts.site.edit_disabled_tooltip"));
+
+  $(".trace-picture").each(function () {
+    let context = $(this);
+    const filename = context[0].dataset.gpxFile;
+    fetch(filename)
+      .then(r => r.text())
+      .then(text => {
+        context[0].innerHTML = text;
+      });
+  });
 });
+

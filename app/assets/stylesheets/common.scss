@@ -960,3 +960,31 @@ img.trace_image {
     }
   }
 }
+
+.trace-picture {
+  background-color: #fafafa;
+  height: 250px;
+  width: 250px;
+}
+
+:root {
+  --color1:grey;
+  --color2:black;
+  --stroke1: 1;
+  --stroke2: 2;
+}
+
+@for $i from 1 through 10 {
+  #gpx > #path#{$i} {
+    animation:p#{$i} 5s 0s infinite;
+    animation-timing-function: step-end;
+  }
+}
+
+@for $i from 1 through 10 {
+  @keyframes p#{$i}{
+    #{(($i)-1)*10}% {stroke:var(--color2); stroke-width: var(--stroke2); }
+    #{($i)*10}% {stroke:var(--color1); stroke-width: var(--stroke1); }
+  }
+}
+
