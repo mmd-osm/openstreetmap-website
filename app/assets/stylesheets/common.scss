@@ -514,7 +514,7 @@ legend {
 
   input:not(:placeholder-shown) + .input-group-text .describe_location {
     display: none;
-  } 
+  }
 }
 
 /* Rules for search results */
@@ -982,3 +982,42 @@ img.trace_image {
 .tooltip.wide {
   --bs-tooltip-max-width: none;
 }
+
+#trace-map {
+  background-color: #fafafa;
+  height: 550px;
+  width: 100%;
+  margin-bottom: 20px;
+}
+
+:root {
+  --color1:gray;
+  --color2:#ff26d4;
+  --stroke1: 2;
+  --stroke2: 2;
+}
+
+#gpx {
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+#gpx path {
+  vector-effect: non-scaling-stroke;
+}
+
+@for $i from 1 through 10 {
+  #gpx > #path#{$i} {
+    animation:p#{$i} 10s 0s infinite;
+    animation-timing-function: step-end;
+  }
+}
+
+@for $i from 1 through 10 {
+  @keyframes p#{$i}{
+    0% {stroke:var(--color1); stroke-width: var(--stroke1); }
+    #{(($i)-1)*10}% {stroke:var(--color2); stroke-width: var(--stroke2); }
+    #{($i)*10}% {stroke:var(--color1); stroke-width: var(--stroke1); }
+  }
+}
+

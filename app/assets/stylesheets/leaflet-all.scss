@@ -17,3 +17,18 @@ div.leaflet-div-icon {
   background: none;
   border: none;
 }
+
+.leaflet-touch .leaflet-control-layers-toggle {
+	background-image: image-url("img/layers.png");
+}
+
+/* Override some conflicting styles.
+   https://github.com/openstreetmap/openstreetmap-website/pull/121#issuecomment-10206946 */
+
+.user_popup p {
+  margin: 0 !important;
+}
+
+.site .leaflet-popup p {
+  margin: 0 0 20px 0;
+}
