@@ -426,6 +426,70 @@ module OSM
     end
   end
 
+  class MercatorSVG
+    include Math
+
+    # Based on https://gitlab.com/l3u/gpx2svg/-/blob/master/gpx2svg
+
+    def initialize
+      @min_x = Float::INFINITY
+      @max_x = -Float::INFINITY
+      @min_y = Float::INFINITY
+      @max_y = -Float::INFINITY
+    end
+
+    def mercator_projection(lat, lon)
+      # Calculate the Mercator projection of a coordinate pair
+
+      # Assuming we're on earth, we have (according to GRS 80):
+      r = 6378137.0
+
+      # As long as meridian = 0 and can't be changed, we don't need:
+      #    meridian = meridian * math.pi / 180.0
+      #    x = r * ((coord[0] * math.pi / 180.0) - meridian)
+
+      # Instead, we use this simplified version:
+      x = r * lat * PI / 180.0
+      y = r * log(tan((PI / 4.0) + ((lon * PI / 180.0) / 2.0)))
+
+      [x, y]
+    end
+
+    def extent_of_projected_data(points)
+      points.each do |x, y|
+        @min_x = x if x < @min_x
+        @min_y = y if y < @min_y
+        @max_x = x if x > @max_x
+        @max_y = y if y > @max_y
+      end
+
+      [@max_x - @min_x, @max_y - @min_y]
+    end
+
+    # Move a dataset to 0,0
+    def calc_zero_based_data(points)
+      points.map do |x, y|
+        [x - @min_x, y - @min_y]
+      end
+    end
+
+    # Calculate the scale factor we need to fit the requested maximal output size
+    def calc_scale_factor(width, height, max_pixels)
+      if width <= max_pixels && height <= max_pixels
+        1
+      elsif width > height
+        max_pixels / width
+      else
+        max_pixels / height
+      end
+    end
+
+    # Return a scaled pair of coordinates
+    def scale_coords(coord, height, scale)
+      [coord[0] * scale, ((coord[1] * -1) + height) * scale]
+    end
+  end
+
   class GreatCircle
     include Math
 

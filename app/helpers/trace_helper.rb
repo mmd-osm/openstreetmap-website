@@ -13,8 +13,7 @@ module TraceHelper
 
   def trace_picture(trace, options = {})
     if trace.image.content_type == "image/svg+xml"
-      content_tag(:div, "", :class => "trace-picture", :"data-gpx-file" => trace_picture_path(trace.user, trace).to_s)
-
+      content_tag(:div, "", :id => "trace-map", :"data-gpx-file" => trace_picture_path(trace.user, trace).to_s)
     else
       options[:class] ||= "trace_image"
       options[:alt] ||= ""

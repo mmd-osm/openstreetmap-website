@@ -961,17 +961,22 @@ img.trace_image {
   }
 }
 
-.trace-picture {
+#trace-map {
   background-color: #fafafa;
-  height: 250px;
-  width: 250px;
+  height: 550px;
+  width: 100%;
+  margin-bottom: 20px;
 }
 
 :root {
-  --color1:grey;
-  --color2:black;
-  --stroke1: 1;
-  --stroke2: 2;
+  --color1:gray;
+  --color2:blue;
+  --stroke1: 3;
+  --stroke2: 5;
+}
+
+#gpx path {
+  vector-effect: non-scaling-stroke;
 }
 
 @for $i from 1 through 10 {
@@ -983,6 +988,7 @@ img.trace_image {
 
 @for $i from 1 through 10 {
   @keyframes p#{$i}{
+    0% {stroke:var(--color1); stroke-width: var(--stroke1); }
     #{(($i)-1)*10}% {stroke:var(--color2); stroke-width: var(--stroke2); }
     #{($i)*10}% {stroke:var(--color1); stroke-width: var(--stroke1); }
   }
