@@ -256,7 +256,7 @@ class Trace < ApplicationRecord
         self.latitude = f_lat
         self.longitude = f_lon
 
-        image.attach(:io => gpx.svg_picture(min_lat, min_lon, max_lat, max_lon, gpx.actual_points), :filename => "#{id}.svg", :content_type => "image/svg+xml")
+        # image is not attached
         icon.attach(:io => gpx.svg_icon(min_lat, min_lon, max_lat, max_lon), :filename => "#{id}_icon.svg", :content_type => "image/svg+xml")
         self.size = gpx.actual_points
         self.inserted = true
