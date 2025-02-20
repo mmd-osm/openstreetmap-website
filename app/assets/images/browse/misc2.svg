@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" version="1.1">
+
+   <svg id="track" width="52" height="3" opacity="0.8"><path d="M0,1.5 H52" stroke="#996600" stroke-width="1.5" stroke-dasharray="6 5"></path></svg>
+
+
+
+
+
+   <svg id="apron" width="26" height="10"><rect width="100%" height="100%" fill="#dadae0"></rect></svg>
+   <svg id="adminboundary" width="52" height="2"><rect width="100%" height="100%" fill="#8d618b88"></rect></svg>
+   <svg id="glacier" width="26" height="10"><rect width="25" height="9" fill="#ddecec" y="0.5" x="0.5" stroke="#9cf" stroke-dasharray="4 2"></rect></svg>
+
+
+   <svg id="heathland" width="26" height="10"><rect width="100%" height="100%" fill="#d6d99f"></rect></svg>
+   <svg id="scrubland" width="26" height="10"><rect width="100%" height="100%" fill="#c8d7ab"></rect></svg>
+   <svg id="sand" width="26" height="10"><rect width="100%" height="100%" fill="#f5e9c6"></rect></svg>
+   <svg id="park" width="26" height="10"><rect width="100%" height="100%" fill="#c8facc"></rect></svg>
+   <svg id="golf" width="26" height="10"><rect width="100%" height="100%" fill="#def6c0"></rect></svg>
+   <svg id="building" width="26" height="10"><rect width="100%" height="100%" fill="#dddddd"></rect></svg>
+
+
+
+
+   <svg id="allotments" width="26" height="10"><rect width="100%" height="100%" fill="#c9e1bf"></rect></svg>
+   <svg id="sportspitch" width="26" height="10"><rect width="100%" height="100%" fill="#88e0be"></rect></svg>
+   <svg id="sportscenter" width="26" height="10"><rect width="100%" height="100%" fill="#dffce2"></rect></svg>
+   <svg id="building2" width="10" height="10"><rect width="9" height="9" fill="#c4b6ab" y="0.5" x="0.5" stroke="#a99a8d"></rect></svg>
+   
+   <!-- aeroway -->
+   
+   // runway
+   // taxiway
+   
+   <!-- highway -->
+
+   <svg id="bridleway" width="52" height="3"><path d="M0,1.5 H52" stroke="green" stroke-width="1.25" stroke-dasharray="4 2"></path></svg>
+   <svg id="cycleway" width="52" height="1"><path d="M0,0.5 H52" stroke="blue" stroke-dasharray="3 3.5"></path></svg>
+   <svg id="footway" width="52" height="3"><path d="M0,1.5 H52" stroke="salmon" stroke-width="1.3" stroke-dasharray="3 3.5"></path></svg>
+   <svg id="motorway" width="52" height="10"><rect width="100%" height="100%" fill="#e892a2"></rect><path d="M0,0.5 H52 M0,9.5 H52" stroke="#dc2a67"></path></svg>
+            
+   
+   <!-- landuse -->
+   
+   <svg id="brownfield" width="20" height="10"><rect width="100%" height="100%" fill="#c7c7b4"></rect></svg>   
+   <svg id="cemetery" width="26" height="10"><rect width="100%" height="100%" fill="#aacbaf"></rect></svg>   
+   <svg id="commercial" width="26" height="10"><rect width="100%" height="100%" fill="#f2dad9"></rect></svg>   
+   <svg id="farmland" width="26" height="10"><rect width="100%" height="100%" fill="#eef0d5"></rect></svg>   
+   <svg id="farm" width="26" height="10"><rect width="100%" height="100%" fill="#f5dcba"></rect></svg>
+   <svg id="forest" width="26" height="10"><rect width="100%" height="100%" fill="#add19e"></rect></svg>
+   <svg id="grass" width="26" height="10"><rect width="100%" height="100%" fill="#cdebb0"></rect></svg>
+   <svg id="industrial" width="26" height="10"><rect width="100%" height="100%" fill="#ebdbe8"></rect></svg>   
+   <svg id="meadow" width="26" height="10"><rect width="100%" height="100%" fill="#cdebb0"></rect></svg>   
+   <svg id="military" width="26" height="10"><rect width="100%" height="100%" fill="#cdebb0"></rect></svg>      <!-- todo color -->
+   <svg id="orchard" width="26" height="10"><rect width="100%" height="100%" fill="#aedfa3"></rect></svg>   
+   <svg id="residential" width="26" height="10"><rect width="100%" height="100%" fill="#e0dfdf"></rect></svg>   
+   <svg id="retail" width="26" height="10"><rect width="100%" height="100%" fill="#ffd6d1"></rect></svg>
+   <svg id="tourism" width="26" height="10"><rect width="100%" height="100%" fill="#cdebb0"></rect></svg>      <!-- todo color -->   
+
+
+   <!-- railway -->
+
+   <svg id="railway" width="52" height="4"><rect width="100%" height="100%" fill="#707070"></rect><path d="M0,2 H52" stroke="white" stroke-dasharray="8" stroke-dashoffset="2" stroke-width="2"></path></svg>   
+   <svg id="lightrail" width="52" height="2"><rect width="100%" height="100%" fill="#666"></rect></svg>
+   <svg id="subway" width="52" height="2"><rect width="100%" height="100%" fill="#999"></rect></svg>
+   <svg id="tram" width="52" height="2"><path d="M0,1 H52" stroke="#6e6e6e" stroke-width="2"></path></svg>
+   
+         
+      
+</svg>

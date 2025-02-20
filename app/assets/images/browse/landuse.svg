@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" version="1.1">
+   <svg id="brownfield" width="20" height="10"><rect width="100%" height="100%" fill="#C7C7B4"></rect></svg>   
+   <svg id="cemetery" width="20" height="10"><rect width="100%" height="100%" fill="#AACAAE"></rect></svg>   
+   <svg id="commercial" width="20" height="10"><rect width="100%" height="100%" fill="#F2DAD9"></rect></svg>   
+   <svg id="farmland" width="20" height="10"><rect width="100%" height="100%" fill="#EFF0D4"></rect></svg>   
+   <svg id="farmyard" width="20" height="10"><rect width="100%" height="100%" fill="#F6DCB9"></rect></svg>
+   <svg id="forest" width="20" height="10"><rect width="100%" height="100%" fill="#AED09C"></rect></svg>
+   <svg id="grass" width="20" height="10"><rect width="100%" height="100%" fill="#CEEAAD"></rect></svg>
+   <svg id="industrial" width="20" height="10"><rect width="100%" height="100%" fill="#EBDBE8"></rect></svg>   
+   <svg id="meadow" width="20" height="10"><rect width="100%" height="100%" fill="#CEEAAD"></rect></svg>   
+   <svg id="military" width="20" height="10"><rect width="100%" height="100%" fill="#E18F8F"></rect></svg>
+   <svg id="residential" width="20" height="10"><rect width="100%" height="100%" fill="#E0DFDF"></rect></svg>   
+   <svg id="retail" width="20" height="10"><rect width="100%" height="100%" fill="#FFD7D1"></rect></svg>
+   <svg id="tourism" width="20" height="10"><rect width="100%" height="100%" fill="#F2CAEA"></rect></svg>
+</svg>
