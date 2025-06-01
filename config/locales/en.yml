@@ -228,6 +228,7 @@ en:
       microsoft: Microsoft
       github: GitHub
       wikipedia: Wikipedia
+      openstreetmap: OpenStreetMap
   api:
     notes:
       comment:
@@ -2786,6 +2787,9 @@ en:
       wikipedia:
         title: Log in with Wikipedia
         alt: Wikipedia logo
+      openstreetmap:
+        title: Log in with OpenStreetMap
+        alt: OpenStreetMap logo
     share:
       share:
         title: Share
