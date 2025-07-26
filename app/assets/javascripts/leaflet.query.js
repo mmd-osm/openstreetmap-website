@@ -2,37 +2,47 @@ L.OSM.query = function (options) {
   const control = L.control(options);
 
   control.onAdd = function (map) {
-    const $container = $("<div>")
-      .attr("class", "control-query");
+    const container = document.createElement("div");
+    container.className = "control-query";
 
-    const link = $("<a>")
-      .attr("class", "control-button")
-      .attr("href", "#")
-      .attr("title", OSM.i18n.t("javascripts.site.queryfeature_tooltip"))
-      .appendTo($container);
+    const link = document.createElement("a");
+    link.className = "control-button";
+    link.href = "#";
+    link.title = OSM.i18n.t("javascripts.site.queryfeature_tooltip");
+    container.appendChild(link);
 
-    $(L.SVG.create("svg"))
-      .append($(L.SVG.create("use")).attr("href", "#icon-query"))
-      .attr("class", "h-100 w-100")
-      .appendTo(link);
+    const svg = L.SVG.create("svg");
+    svg.setAttribute("class", "h-100 w-100");
+
+    const use = L.SVG.create("use");
+    use.setAttribute("href", "#icon-query");
+
+    svg.appendChild(use);
+    link.appendChild(svg);
 
     map.on("zoomend", update);
 
     function update() {
-      const wasDisabled = link.hasClass("disabled"),
-            isDisabled = map.getZoom() < 14;
-      link
-        .toggleClass("disabled", isDisabled)
-        .attr("data-bs-original-title", OSM.i18n.t(isDisabled ?
-          "javascripts.site.queryfeature_disabled_tooltip" :
-          "javascripts.site.queryfeature_tooltip"));
-      if (isDisabled === wasDisabled) return;
-      link.trigger(isDisabled ? "disabled" : "enabled");
+      const isDisabled = map.getZoom() < 14;
+      const wasDisabled = link.classList.contains("disabled");
+
+      if (isDisabled) {
+        link.classList.add("disabled");
+        link.setAttribute("data-bs-original-title", OSM.i18n.t("javascripts.site.queryfeature_disabled_tooltip"));
+      } else {
+        link.classList.remove("disabled");
+        link.setAttribute("data-bs-original-title", OSM.i18n.t("javascripts.site.queryfeature_tooltip"));
+      }
+
+      if (isDisabled !== wasDisabled) {
+        const event = new CustomEvent(isDisabled ? "disabled" : "enabled");
+        link.dispatchEvent(event);
+      }
     }
 
     update();
 
-    return $container[0];
+    return container;
   };
 
   return control;
