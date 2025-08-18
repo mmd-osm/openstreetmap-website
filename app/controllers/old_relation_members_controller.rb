@@ -1,4 +1,6 @@
 class OldRelationMembersController < OldElementsController
+  include BrowseHelper
+
   def show
     @type = "relation"
     @current_feature = Relation.find(params[:id])
@@ -6,6 +8,8 @@ class OldRelationMembersController < OldElementsController
     @frame_id = "member_relation_#{@feature.id}"
 
     return deny_access(nil) if @feature.redacted? && !params[:show_redactions]
+
+    prefetch_member_tags(@feature)
 
     render :partial => "browse/relation_member_frame", :locals => { :relation => @feature, :frame_id => @frame_id }
   rescue ActiveRecord::RecordNotFound

@@ -1,4 +1,17 @@
 module BrowseHelper
+  def prefetch_member_tags(feature)
+    members = feature.relation_members.filter_map(&:member)
+
+    members.group_by(&:class).each do |klass, records|
+      association = :"#{klass.name.downcase}_tags"
+
+      ActiveRecord::Associations::Preloader.new(
+        :records => records,
+        :associations => association
+      ).call
+    end
+  end
+
   def element_icon(type, object)
     selected_icon_data = { :filename => "#{type}.svg", :priority => 1 }
 
