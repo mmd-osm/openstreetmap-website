@@ -45,5 +45,7 @@ module OpenStreetMap
       config.logstasher.logger_path = Settings.logstash_path
       config.logstasher.log_controller_parameters = true
     end
+
+    config.middleware.use Rack::RubyProf, :path => "./tmp/profile"
   end
 end
