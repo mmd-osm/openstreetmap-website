@@ -201,4 +201,17 @@ $(function () {
 
   $("#edit_tab")
     .attr("title", OSM.i18n.t("javascripts.site.edit_disabled_tooltip"));
+
+  $("#select_language_dialog").on("shown.bs.modal", function () {
+    const $frame = $("#select_language_list");
+    const originalSrc = new URL($frame.attr("src"), window.location.origin);
+
+    // Set `source` query param to current page path + query string
+    originalSrc.searchParams.set("source", window.location.pathname + window.location.search);
+
+    if ($frame.attr("src") !== originalSrc.toString()) {
+      $frame.attr("src", originalSrc.toString());
+    }
+  });
 });
+
