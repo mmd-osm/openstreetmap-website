@@ -5,7 +5,8 @@
             :title => t("application.auth_providers.#{provider}.title") do %>
   <%= inline_svg_tag "auth_providers/#{provider}.svg",
                      :class => "rounded-1 text-body-emphasis",
-                     :size => "36" %>
+                     :size => "36",
+                     :nonce => content_security_policy_nonce %>
   <% if preferred %>
     <%= t "application.auth_providers.#{provider}.title" %>
   <% end %>

@@ -6,8 +6,18 @@ module OpenStreetMap
       end
     end
   end
+
+  class CustomStyleNonceTransformer < InlineSvg::CustomTransformation
+    def transform(doc)
+      doc.css("style").each do |script|
+        script["nonce"] = value
+      end
+      doc
+    end
+  end
 end
 
 InlineSvg.configure do |config|
   config.add_custom_transformation(:attribute => :to_symbol, :transform => OpenStreetMap::SvgToSymbolTransform)
+  config.add_custom_transformation(:attribute => :nonce, :transform => OpenStreetMap::CustomStyleNonceTransformer)
 end
