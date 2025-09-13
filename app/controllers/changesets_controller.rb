@@ -165,15 +165,19 @@ class ChangesetsController < ApplicationController
                        .order(:node_id, :version)
                        .offset(ELEMENTS_PER_PAGE * (@current_node_page - 1))
                        .limit(ELEMENTS_PER_PAGE)
+    preload_composite_association(@nodes, :old_tags)
   end
 
   def load_ways
     @ways_count = @changeset.actual_num_changed_ways
     @current_way_page = params[:way_page].to_i.clamp(1, element_pages_count(@ways_count))
+
     @ways = @changeset.old_ways
                       .order(:way_id, :version)
                       .offset(ELEMENTS_PER_PAGE * (@current_way_page - 1))
                       .limit(ELEMENTS_PER_PAGE)
+                      .to_a
+    preload_composite_association(@ways, :old_tags)
   end
 
   def load_relations
@@ -183,6 +187,7 @@ class ChangesetsController < ApplicationController
                            .order(:relation_id, :version)
                            .offset(ELEMENTS_PER_PAGE * (@current_relation_page - 1))
                            .limit(ELEMENTS_PER_PAGE)
+    preload_composite_association(@relations, :old_tags)
   end
 
   helper_method def element_pages_count(elements_count)
@@ -193,5 +198,31 @@ class ChangesetsController < ApplicationController
     { :x => (ELEMENTS_PER_PAGE * (page - 1)) + 1,
       :y => [ELEMENTS_PER_PAGE * page, elements_count].min,
       :count => elements_count }
+  end
+
+  def preload_composite_association(records, assoc_name)
+    return if records.empty?
+
+    model_class = records.first.class
+    reflection = model_class.reflect_on_association(assoc_name)
+    assoc_class = reflection.klass
+
+    key_columns = Array(reflection.options[:query_constraints])
+    raise ArgumentError, "Key columns could not be determined" if key_columns.empty?
+
+    keys = records.map { |r| key_columns.map { |k| r.public_send(k) } }
+    tuples = keys.map { |tuple| "(#{tuple.join(', ')})" }.join(", ")
+    sql = "(#{key_columns.join(', ')}) IN (#{tuples})"
+
+    associated_records = assoc_class.where(sql)
+
+    grouped = associated_records.group_by { |a| key_columns.map { |k| a.public_send(k) } }
+
+    records.each do |record|
+      key = key_columns.map { |k| record.public_send(k) }
+      assoc = record.association(assoc_name)
+      assoc.target = grouped[key] || []
+      assoc.loaded!
+    end
   end
 end
