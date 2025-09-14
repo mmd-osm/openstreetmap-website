@@ -37,6 +37,52 @@ OSM.Export = function (map) {
     validateControls();
   }
 
+  async function showConfirmationModal(message = "Are you sure?") {
+    return new Promise((resolve) => {
+      // Create modal HTML dynamically
+      const modalHtml = `
+          <div class="modal fade" tabindex="-1" id="dynamicConfirmModal">
+              <div class="modal-dialog modal-dialog-centered">
+                  <div class="modal-content">
+                      <div class="modal-header">
+                          <h5 class="modal-title">Confirm</h5>
+                          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                      </div>
+                      <div class="modal-body">
+                          <p>${message}</p>
+                      </div>
+                      <div class="modal-footer">
+                          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                          <button type="button" class="btn btn-primary" id="confirmYesBtn">Yes</button>
+                      </div>
+                  </div>
+              </div>
+          </div>`;
+
+      // Insert into body
+      document.body.insertAdjacentHTML("beforeend", modalHtml);
+
+      const modalElement = document.getElementById("dynamicConfirmModal");
+      const modal = new bootstrap.Modal(modalElement, {
+        backdrop: "static",
+        keyboard: false
+      });
+
+      modal.show();
+
+      // Confirm or cancel
+      modalElement.querySelector("#confirmYesBtn").addEventListener("click", () => {
+        resolve(true);
+        modal.hide();
+      });
+
+      modalElement.addEventListener("hidden.bs.modal", () => {
+        resolve(false);
+        modalElement.remove(); // Clean up DOM
+      });
+    });
+  }
+
   function setBounds(bounds) {
     const truncated = [bounds.getSouthWest(), bounds.getNorthEast()]
       .map(c => OSM.cropLocation(c, map.getZoom()));
@@ -82,6 +128,18 @@ OSM.Export = function (map) {
       .addEventListener("turbo:before-fetch-request", function (event) {
         event.detail.fetchOptions.headers.Accept = "application/xml";
       });
+
+    $("#export_overpass").on("click", async function (event) {
+      event.preventDefault();
+
+      const downloadUrl = $(this).attr("href");
+
+      const confirmed = await showConfirmationModal("Do you want to export and download the data?");
+      if (confirmed) {
+        // Start download
+        window.location.href = downloadUrl;
+      }
+    });
 
     update();
     return map.getState();
