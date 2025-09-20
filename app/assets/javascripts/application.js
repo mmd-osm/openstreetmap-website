@@ -201,4 +201,21 @@ $(function () {
 
   $("#edit_tab")
     .attr("title", OSM.i18n.t("javascripts.site.edit_disabled_tooltip"));
+
+  $("#language_search").on("input", function () {
+    const query = $(this).val().toLowerCase();
+
+    $(".language-item").each(function () {
+      const text = $(this).text().toLowerCase();
+      if (text.indexOf(query) > -1) {
+        $(this).show();
+      } else {
+        $(this).hide();
+      }
+    });
+  });
+
+  $("#select_language_dialog").on("shown.bs.modal", function () {
+    $("#language_search").val("").trigger("input");
+  });
 });

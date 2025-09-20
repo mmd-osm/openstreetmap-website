@@ -1,6 +1,13 @@
+<div class="mb-3">
+  <%= text_field_tag :language_search,
+                     params[:language_search],
+                     :placeholder => t("en.layouts.select_language_list.search_language", :default => "Search languages..."),
+                     :autocomplete => "off",
+                     :class => "form-control py-2 px-3" %>
+</div>
 <ul class="select_language_list list-unstyled column-gap-0">
   <% AVAILABLE_LANGUAGES.each do |language| %>
-    <li>
+    <li class="language-item">
       <%= link_to({ :locale => language[:code] },
                   { :class => ["btn btn-link text-start",
                                { "bg-body-secondary text-secondary-emphasis" => language[:code] == I18n.locale.to_s }],

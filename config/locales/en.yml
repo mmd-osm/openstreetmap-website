@@ -1763,6 +1763,7 @@ en:
     select_language_button:
       title: Select Language
     select_language_list:
+      search_language: Search languages...
       languages:
         af: Afrikaans
         gsw: Alemannic
